@@ -1,0 +1,74 @@
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+# Load pre-trained VGG16 model for image feature extraction
+base_model = VGG16(weights='imagenet', include_top=False)
+
+# Build the image feature extraction model
+image_model = keras.Sequential([
+    layers.Input(shape=(224, 224, 3)),
+    layers.Lambda(preprocess_input),
+    base_model,
+    layers.GlobalAveragePooling2D(),
+])
+
+# Build the text generation model using LSTM
+text_model = keras.Sequential([
+    layers.Embedding(input_dim=10000, output_dim=256, input_length=20),
+    layers.LSTM(256),
+    layers.Dense(256, activation='relu'),
+    layers.Dense(10000, activation='softmax'),
+])
+
+# Combine the image and text models
+combined_model = keras.Sequential([
+    layers.Input(shape=(224, 224, 3)),
+    image_model,
+    layers.Input(shape=(20,)),
+    text_model,
+])
+
+# Compile the combined model
+combined_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Train the model using your dataset (not provided here)
+# ...
+
+# Use the trained model for image captioning
+def generate_caption(image_path):
+    img = image.load_img(image_path, target_size=(224, 224))
+    img_array = image.img_to_array(img)
+    img_array = tf.expand_dims(img_array, 0)
+
+    # Extract image features using the pre-trained VGG16 model
+    img_features = image_model.predict(img_array)
+
+    # Generate captions using the text generation model
+    start_token = tokenizer.word_index['<start>']
+    end_token = tokenizer.word_index['<end>']
+    
+    input_text = [start_token]
+    
+    for _ in range(max_caption_length):
+        sequence = pad_sequences([input_text], maxlen=max_caption_length)
+        caption_pred = text_model.predict([img_features, sequence])
+        token_pred = np.argmax(caption_pred)
+
+        if token_pred == end_token:
+            break
+
+        input_text.append(token_pred)
+
+    caption = tokenizer.sequences_to_texts([input_text])[0].replace('<start>', '').replace('<end>', '').strip()
+    return caption
+
+# Example usage
+image_path = 'path/to/your/image.jpg'
+caption = generate_caption(image_path)
+print(f"Image Caption: {caption}")
